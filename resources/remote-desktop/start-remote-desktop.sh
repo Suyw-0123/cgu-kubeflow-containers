@@ -86,6 +86,8 @@ fi
 
 echo "KFP multi-user has been configured"
 
+# /opt/conda/envs links to this directory (see ∞_CMD_remote-desktop.Dockerfile); a new home volume does not have it
+mkdir -p $HOME/envs
 # Create desktop shortcuts
 if [ -d $RESOURCES_PATH/desktop-files ]; then
     mkdir -p ~/.local/share/applications/ $HOME/Desktop
