@@ -331,8 +331,11 @@ RUN rm /usr/share/applications/exo-mail-reader.desktop
 RUN apt-get remove -y -q light-locker
 
 
+# Rename the rocker user rstudio to jovyan. Its primary group becomes users (NB_GID), the group of the home
+# directory; it stays in rstudio, which owns files under /opt/grib2, and joins sudo, so jovyan can run commands
+# as root with its password.
 # apt-get may result in root-owned directories/files under $HOME
-RUN usermod -l $NB_USER -d /home/$NB_USER rstudio && \
+RUN usermod -l $NB_USER -d /home/$NB_USER -g $NB_GID -aG sudo,rstudio rstudio && \
     chown -R $NB_UID:$NB_GID $HOME
 
 ENV NB_USER=$NB_USER
