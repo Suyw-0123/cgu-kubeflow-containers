@@ -14,6 +14,21 @@ else
   sleep infinity
 fi
 
+# keep passwd/shadow in the home volume so password changes survive restarts
+# (the password hash lives in shadow, so passwd alone is not enough)
+for f in passwd shadow; do
+  persist=/home/jovyan/$f
+  # jovyan owns the home dir and could swap the file, only trust root-owned copies
+  if [ -L "$persist" ] || { [ -e "$persist" ] && [ "$(stat -c %u "$persist")" != 0 ]; }; then
+    echo "WARNING: $persist is not owned by root, discarding it"
+    rm -f "$persist"
+  fi
+  if [ ! -f "$persist" ]; then
+    cp -a /etc/$f "$persist"
+  fi
+  ln -sf "$persist" /etc/$f
+done
+
 test -z "$GIT_EXAMPLE_NOTEBOOKS" || git clone "$GIT_EXAMPLE_NOTEBOOKS"
 
 
@@ -215,6 +230,12 @@ mv /var/www/html/index.php $HOME/index.php
 # openssh-server is installed in remote-desktop but not in remote-desktop-ros
 if [ -x /etc/init.d/ssh ]; then
     /etc/init.d/ssh start
+    # show the ssh nodePort on the desktop
+    SSH_PORT=$(kubectl get svc $(echo $HOSTNAME | cut -d- -f1)-ssh-service -o=jsonpath="{.spec.ports[*].nodePort}" 2>/dev/null)
+    rm -rf $HOME/Desktop/ssh_port_is_*
+    if [ -n "$SSH_PORT" ]; then
+        mkdir -p $HOME/Desktop/ssh_port_is_$SSH_PORT
+    fi
 fi
 
 nginx
