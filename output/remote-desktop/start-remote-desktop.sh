@@ -14,6 +14,21 @@ else
   sleep infinity
 fi
 
+# /etc/shadow is reset with the container, so restore jovyan's password from the hash that save-jovyan-password
+# stored in the home directory after the last password change. Only jovyan's own password is taken from the file.
+password_hash=$(runuser -u jovyan -- cat /home/jovyan/.password-hash 2>/dev/null)
+case "$password_hash" in
+  '') ;;
+  *[!A-Za-z0-9./\$]*) echo "ERROR: /home/jovyan/.password-hash is not a password hash; jovyan keeps the default password" >&2 ;;
+  *) usermod -p "$password_hash" jovyan || echo "ERROR: could not restore jovyan's password" >&2 ;;
+esac
+# remote-desktop V1.2.0 kept root-owned copies of /etc/passwd and /etc/shadow in the home directory; they are not used
+for f in /home/jovyan/passwd /home/jovyan/shadow; do
+  if [ -f "$f" ] && [ ! -L "$f" ] && [ "$(stat -c %u "$f")" = 0 ]; then
+    rm -f "$f"
+  fi
+done
+
 test -z "$GIT_EXAMPLE_NOTEBOOKS" || git clone "$GIT_EXAMPLE_NOTEBOOKS"
 
 
@@ -215,6 +230,12 @@ mv /var/www/html/index.php $HOME/index.php
 # openssh-server is installed in remote-desktop but not in remote-desktop-ros
 if [ -x /etc/init.d/ssh ]; then
     /etc/init.d/ssh start
+    # show the ssh nodePort on the desktop
+    SSH_PORT=$(kubectl get svc $(echo $HOSTNAME | cut -d- -f1)-ssh-service -o=jsonpath="{.spec.ports[*].nodePort}" 2>/dev/null)
+    rm -rf $HOME/Desktop/ssh_port_is_*
+    if [ -n "$SSH_PORT" ]; then
+        mkdir -p $HOME/Desktop/ssh_port_is_$SSH_PORT
+    fi
 fi
 
 nginx

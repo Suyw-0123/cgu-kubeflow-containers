@@ -468,9 +468,19 @@ RUN rm /usr/share/applications/exo-mail-reader.desktop
 RUN apt-get remove -y -q light-locker
 
 
+# Rename the rocker user rstudio to jovyan. Its primary group becomes users (NB_GID), the group of the home
+# directory; it stays in rstudio, which owns files under /opt/grib2, and joins sudo, so jovyan can run commands
+# as root with its password.
 # apt-get may result in root-owned directories/files under $HOME
-RUN usermod -l $NB_USER rstudio && \
+RUN usermod -l $NB_USER -d /home/$NB_USER -g $NB_GID -aG sudo,rstudio rstudio && \
     chown -R $NB_UID:$NB_GID $HOME
+
+# Keep jovyan's password across restarts: after every password change, save-jovyan-password stores the new hash
+# in the home directory, and start-remote-desktop.sh restores it. seteuid runs the hook as root, which it needs to
+# read /etc/shadow when jovyan changes its own password.
+COPY save-jovyan-password /usr/local/sbin/save-jovyan-password
+RUN chmod 755 /usr/local/sbin/save-jovyan-password && \
+    echo 'password optional pam_exec.so seteuid /usr/local/sbin/save-jovyan-password' >> /etc/pam.d/common-password
 
 ENV NB_USER=$NB_USER
 ENV NB_NAMESPACE=$NB_NAMESPACE
