@@ -473,7 +473,9 @@ RUN systemctl --user mask tracker-store.service tracker-miner-fs.service tracker
     echo "y" | tracker reset --hard && \
     rm -rf ~/.cache/tracker ~/.local/share/tracker
 
-# install ssh
+# install ssh. The host keys that the package creates are removed in the same layer, so no image layer contains
+# them; start-remote-desktop.sh gives each notebook its own keys.
 RUN apt update && \
-apt install openssh-server -y
+apt install openssh-server -y && \
+rm -f /etc/ssh/ssh_host_*
 

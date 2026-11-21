@@ -231,6 +231,23 @@ mv /var/www/html/index.php $HOME/index.php
 
 # openssh-server is installed in remote-desktop but not in remote-desktop-ros
 if [ -x /etc/init.d/ssh ]; then
+    # The image has no SSH host keys. Each notebook keeps its own in ~/.ssh/host-keys, so clients see the same
+    # keys after a restart or an image upgrade. A key missing there, or not usable by sshd, is created and saved.
+    # To change a key, replace or delete its file there and restart the notebook. Files are read as root (they may
+    # have been put there from the desktop terminal, which runs as root) or else as jovyan, and saved as jovyan,
+    # as the password hash is, for volumes that do not let root read or write (NFS with root_squash).
+    host_keys=/home/jovyan/.ssh/host-keys
+    for type in rsa ecdsa ed25519; do
+        key=/etc/ssh/ssh_host_${type}_key
+        rm -f $key $key.pub
+        (umask 077 && { cat $host_keys/ssh_host_${type}_key || runuser -u jovyan -- cat $host_keys/ssh_host_${type}_key; } > $key 2>/dev/null)
+        ssh-keygen -y -P '' -f $key < /dev/null > $key.pub 2>/dev/null && continue
+        [ -s $key ] && echo "ERROR: $host_keys/ssh_host_${type}_key is not a key without a passphrase; replacing it with a new key" >&2
+        rm -f $key $key.pub
+        ssh-keygen -q -t $type -N '' -f $key < /dev/null
+        runuser -u jovyan -- sh -c "umask 077 && mkdir -p $host_keys && cat > $host_keys/ssh_host_${type}_key.tmp && mv -f $host_keys/ssh_host_${type}_key.tmp $host_keys/ssh_host_${type}_key" < $key \
+            || echo "ERROR: could not save the SSH host key in $host_keys; it changes at the next start" >&2
+    done
     /etc/init.d/ssh start
     # show the ssh nodePort on the desktop
     SSH_PORT=$(kubectl get svc $(echo $HOSTNAME | cut -d- -f1)-ssh-service -o=jsonpath="{.spec.ports[*].nodePort}" 2>/dev/null)
